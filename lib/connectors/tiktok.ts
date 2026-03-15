@@ -1,15 +1,21 @@
 import { buildMockItems } from "@/lib/seed/mock-data";
 import { SearchInput } from "@/lib/types/domain";
 import { rangeToHours } from "@/lib/utils/time";
-import { SourceConnector } from "./types";
+import { ConnectorResult, SourceConnector } from "./types";
 
 export class TikTokConnector implements SourceConnector {
   source = "tiktok" as const;
   enabled = process.env.ENABLE_TIKTOK_CONNECTOR !== "false";
 
-  async collect(query: SearchInput) {
+  async collect(query: SearchInput): Promise<ConnectorResult> {
     if (!this.enabled) {
-      return { source: this.source, items: [], healthy: false, message: "Connector disabled by configuration" };
+      return {
+        source: this.source,
+        items: [],
+        healthy: false,
+        mode: "disabled" as const,
+        message: "Connector disabled by configuration"
+      };
     }
 
     // TikTok official API access can be restricted by account/app approval.
@@ -17,7 +23,8 @@ export class TikTokConnector implements SourceConnector {
     return {
       source: this.source,
       items,
-      healthy: true,
+      healthy: false,
+      mode: "fallback" as const,
       message: "Mock TikTok data loaded (use official API when approved)"
     };
   }

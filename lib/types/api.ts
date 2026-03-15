@@ -5,7 +5,7 @@ export const searchSchema = z.object({
   category: z.enum(["stock", "sports", "product", "auto"]).default("auto"),
   timeRange: z.enum(["24h", "7d", "30d", "90d"]).default("7d"),
   language: z.string().default("en"),
-  selectedSources: z.array(z.enum(["reddit", "youtube", "tiktok", "facebook"])).min(1),
+  selectedSources: z.array(z.enum(["reddit", "youtube", "tiktok", "facebook", "openrouter"])).min(1),
   minMentions: z.number().int().nonnegative().default(3)
 });
 

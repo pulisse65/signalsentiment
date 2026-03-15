@@ -7,6 +7,8 @@ import { MentionVolumeChart } from "@/components/charts/mention-volume-chart";
 import { SentimentTrendChart } from "@/components/charts/sentiment-trend-chart";
 import { SourceBreakdownChart } from "@/components/charts/source-breakdown-chart";
 import { ThemeFrequencyChart } from "@/components/charts/theme-frequency-chart";
+import { ReportSourceExplorer } from "@/components/report-source-explorer";
+import { DeleteReportButton } from "@/components/delete-report-button";
 import { getReportById } from "@/lib/repositories/report-repository";
 import { getCurrentUserId } from "@/lib/supabase/auth";
 
@@ -16,6 +18,12 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const report = await getReportById(id, userId);
 
   if (!report) notFound();
+
+  const themeChartData = [...report.topPositiveThemes, ...report.topNegativeThemes]
+    .slice(0, 10)
+    .map((theme) => ({ theme: theme.theme, count: theme.count }));
+  const fallbackThemeData = report.risingKeywords.slice(0, 8).map((theme, idx) => ({ theme, count: Math.max(1, 8 - idx) }));
+  const effectiveThemeData = themeChartData.length > 0 ? themeChartData : fallbackThemeData;
 
   return (
     <div className="space-y-6">
@@ -102,11 +110,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
             <CardTitle>Theme Frequency</CardTitle>
           </CardHeader>
           <CardContent>
-            <ThemeFrequencyChart
-              data={[...report.topPositiveThemes, ...report.topNegativeThemes]
-                .slice(0, 10)
-                .map((theme) => ({ theme: theme.theme, count: theme.count }))}
-            />
+            <ThemeFrequencyChart data={effectiveThemeData} />
           </CardContent>
         </Card>
       </section>
@@ -169,24 +173,18 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Representative Content</CardTitle>
+          <CardTitle>How Scoring Works</CardTitle>
+          <CardDescription>Transparent scoring from content polarity, engagement, and recency.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {report.representativeItems.map((item) => (
-            <div key={`${item.source}-${item.externalId}`} className="rounded-lg border p-3 text-sm">
-              <p className="font-medium">{item.title ?? "Untitled"}</p>
-              <p className="mt-1 text-muted-foreground">{item.text}</p>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span>{item.source}</span>
-                <span>{new Date(item.publishedAt).toLocaleString()}</span>
-                <a href={item.url} target="_blank" rel="noreferrer" className="text-primary underline">
-                  Source
-                </a>
-              </div>
-            </div>
-          ))}
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>1. Content is normalized, deduplicated, and relevance-filtered (especially for Reddit).</p>
+          <p>2. Each item gets a polarity score from either explicit model sentiment signals or lexical sentiment rules.</p>
+          <p>3. Scores are weighted by engagement (comments/upvotes/likes/views) and freshness (newer items weigh more).</p>
+          <p>4. Final score is mapped to -100..+100, with per-source breakdown and confidence notes.</p>
         </CardContent>
       </Card>
+
+      <ReportSourceExplorer report={report} />
 
       <div className="flex flex-wrap gap-3">
         <Button asChild>
@@ -198,6 +196,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         <Button variant="ghost" asChild>
           <Link href="/history">View history</Link>
         </Button>
+        <DeleteReportButton reportId={report.reportId} redirectTo="/history" />
       </div>
     </div>
   );

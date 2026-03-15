@@ -17,13 +17,14 @@ const templates: MockTemplate[] = [
 
 export function buildMockItems(query: string, source: SourceName, hoursWindow: number) {
   const now = Date.now();
+  const runSalt = Math.floor(Math.random() * 100000);
   return Array.from({ length: 24 }).map((_, index) => {
-    const template = templates[index % templates.length];
-    const ageHours = Math.floor((index / 24) * hoursWindow);
+    const template = templates[(index + runSalt) % templates.length];
+    const ageHours = Math.floor((index / 24) * hoursWindow) + (index % 3);
     const publishedAt = new Date(now - ageHours * 3600 * 1000).toISOString();
     return {
       source,
-      externalId: `${source}-${query}-${index}`,
+      externalId: `${source}-${query}-${runSalt}-${index}`,
       url: `https://${source}.example.com/post/${encodeURIComponent(query)}-${index}`,
       author: `${source}_user_${index}`,
       title: `${query} discussion ${index + 1}`,
@@ -31,11 +32,11 @@ export function buildMockItems(query: string, source: SourceName, hoursWindow: n
       language: "en",
       publishedAt,
       engagement: {
-        likes: 40 + index * 3,
-        comments: 5 + (index % 11),
-        views: 200 + index * 30,
-        shares: 1 + (index % 6),
-        upvotes: 30 + index * 2
+        likes: 30 + index * 2 + (runSalt % 5),
+        comments: 3 + (index % 9) + (runSalt % 3),
+        views: 120 + index * 25 + (runSalt % 40),
+        shares: 1 + (index % 5),
+        upvotes: 20 + index * 2 + (runSalt % 7)
       }
     };
   });

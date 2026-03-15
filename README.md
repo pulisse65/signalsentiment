@@ -7,7 +7,7 @@ It supports multi-source sentiment analysis with a connector-based ingestion lay
 ## MVP Features
 
 - Search topics/entities with category + source filters
-- Connector framework for Reddit, YouTube, TikTok, Facebook
+- Connector framework for Reddit, OpenRouter, YouTube, TikTok, Facebook
 - Sentiment scoring from -100 to +100 with transparent weighting
 - Trend and mention-volume time series
 - Top positive/negative themes + rising keywords
@@ -53,9 +53,22 @@ Connectors implement `SourceConnector` (`lib/connectors/types.ts`):
 Current connectors provide policy-safe mock data and explicit messages where official APIs should be integrated:
 
 - `lib/connectors/reddit.ts`
+- `lib/connectors/openrouter.ts`
 - `lib/connectors/youtube.ts`
 - `lib/connectors/tiktok.ts`
 - `lib/connectors/facebook.ts`
+
+Reddit connector behavior:
+
+- Uses official Reddit OAuth API when `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` are set
+- Uses a public endpoint fallback when OAuth credentials are not configured
+- Falls back to mock data only if both live paths fail
+
+OpenRouter connector behavior:
+
+- Uses `OPENROUTER_API_KEY` to list models and run sentiment classification prompt calls
+- Aggregates model outputs as source items
+- Supports `OPENROUTER_MAX_MODELS` cap to control cost/latency
 
 Facebook connector behavior:
 
@@ -124,6 +137,17 @@ For Facebook, set:
 - `FACEBOOK_APP_SECRET`
 - `FACEBOOK_ACCESS_TOKEN`
 - optional `FACEBOOK_GRAPH_BASE_URL` (defaults to `https://graph.facebook.com/v21.0`)
+
+For Reddit, set:
+
+- `REDDIT_CLIENT_ID`
+- `REDDIT_CLIENT_SECRET`
+- optional `REDDIT_USER_AGENT`
+
+For OpenRouter, set:
+
+- `OPENROUTER_API_KEY`
+- optional `OPENROUTER_MAX_MODELS`
 
 3. Run Supabase migration in your project.
 

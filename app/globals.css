@@ -3,25 +3,84 @@
 @tailwind utilities;
 
 :root {
-  --background: 213 33% 97%;
-  --foreground: 222 47% 12%;
+  --background: 214 52% 96%;
+  --foreground: 223 47% 12%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 12%;
-  --primary: 191 87% 36%;
+  --card-foreground: 223 47% 12%;
+  --primary: 192 86% 45%;
   --primary-foreground: 210 40% 98%;
-  --secondary: 197 44% 91%;
-  --secondary-foreground: 222 47% 12%;
-  --muted: 214 31% 93%;
-  --muted-foreground: 215 19% 35%;
-  --border: 214 32% 86%;
+  --secondary: 213 44% 90%;
+  --secondary-foreground: 223 47% 12%;
+  --muted: 214 35% 92%;
+  --muted-foreground: 220 22% 35%;
+  --border: 214 30% 82%;
+  --chart-cyan: #12b3d6;
+  --chart-blue: #3b82f6;
+  --chart-violet: #7c3aed;
+  --chart-orange: #fb923c;
+  --chart-pink: #fb7185;
+  --chart-grid: rgba(37, 99, 235, 0.16);
+  --chart-axis: rgba(15, 23, 42, 0.55);
+  --chart-tooltip-bg: rgba(255, 255, 255, 0.94);
+  --chart-tooltip-border: rgba(148, 163, 184, 0.5);
+}
+
+.dark {
+  --background: 221 66% 8%;
+  --foreground: 210 30% 96%;
+  --card: 221 57% 12%;
+  --card-foreground: 210 30% 96%;
+  --primary: 177 84% 46%;
+  --primary-foreground: 222 47% 12%;
+  --secondary: 221 43% 18%;
+  --secondary-foreground: 210 30% 96%;
+  --muted: 221 42% 15%;
+  --muted-foreground: 213 21% 74%;
+  --border: 220 38% 24%;
+  --chart-cyan: #2dd4bf;
+  --chart-blue: #38bdf8;
+  --chart-violet: #818cf8;
+  --chart-orange: #fb923c;
+  --chart-pink: #fb7185;
+  --chart-grid: rgba(56, 189, 248, 0.2);
+  --chart-axis: rgba(148, 163, 184, 0.8);
+  --chart-tooltip-bg: rgba(15, 23, 42, 0.95);
+  --chart-tooltip-border: rgba(56, 189, 248, 0.35);
 }
 
 * {
   @apply border-border;
 }
 
+html,
+body {
+  min-height: 100%;
+}
+
 body {
   @apply bg-background text-foreground antialiased;
-  background-image: radial-gradient(circle at top right, rgba(11, 153, 177, 0.13), transparent 45%),
-    radial-gradient(circle at bottom left, rgba(33, 81, 195, 0.08), transparent 45%);
+  background-image:
+    radial-gradient(circle at 12% 10%, rgba(39, 185, 218, 0.18), transparent 35%),
+    radial-gradient(circle at 86% 24%, rgba(255, 126, 95, 0.16), transparent 32%),
+    radial-gradient(circle at 72% 92%, rgba(94, 114, 228, 0.18), transparent 40%);
+}
+
+.dark body {
+  background-image:
+    radial-gradient(circle at 14% 16%, rgba(17, 194, 203, 0.2), transparent 35%),
+    radial-gradient(circle at 82% 18%, rgba(255, 126, 95, 0.2), transparent 32%),
+    radial-gradient(circle at 78% 88%, rgba(72, 96, 255, 0.22), transparent 40%),
+    linear-gradient(180deg, #041125 0%, #020915 100%);
+}
+
+@keyframes search-progress-shimmer {
+  0% {
+    transform: translateX(-70%);
+  }
+  50% {
+    transform: translateX(10%);
+  }
+  100% {
+    transform: translateX(90%);
+  }
 }

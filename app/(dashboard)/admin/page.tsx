@@ -1,6 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getConnectorHealth, listIngestionRuns } from "@/lib/repositories/report-repository";
 
+function modeBadge(mode: "live" | "fallback" | "disabled") {
+  if (mode === "live") return "bg-emerald-100 text-emerald-800";
+  if (mode === "fallback") return "bg-amber-100 text-amber-800";
+  return "bg-slate-200 text-slate-700";
+}
+
 export default async function AdminPage() {
   const health = await getConnectorHealth();
   const runs = await listIngestionRuns();
@@ -19,7 +25,10 @@ export default async function AdminPage() {
               <div key={status.source} className="rounded-lg border p-4">
                 <div className="flex items-center justify-between">
                   <p className="font-medium capitalize">{status.source}</p>
-                  <p className={`text-sm ${status.healthy ? "text-emerald-700" : "text-amber-700"}`}>{status.healthy ? "Healthy" : "Degraded"}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${modeBadge(status.mode)}`}>{status.mode}</span>
+                    <p className={`text-sm ${status.healthy ? "text-emerald-700" : "text-amber-700"}`}>{status.healthy ? "Healthy" : "Degraded"}</p>
+                  </div>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{status.message ?? "No status message."}</p>
                 <p className="mt-1 text-xs text-muted-foreground">Last run: {status.lastRunAt ? new Date(status.lastRunAt).toLocaleString() : "N/A"}</p>
@@ -43,7 +52,10 @@ export default async function AdminPage() {
                   <p className="font-medium">
                     {run.query} • <span className="capitalize">{run.source}</span>
                   </p>
-                  <p className={run.status === "success" ? "text-emerald-700" : "text-red-700"}>{run.status}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${modeBadge(run.mode)}`}>{run.mode}</span>
+                    <p className={run.status === "success" ? "text-emerald-700" : "text-red-700"}>{run.status}</p>
+                  </div>
                 </div>
                 <p className="mt-1 text-muted-foreground">Items: {run.itemCount}</p>
                 <p className="text-xs text-muted-foreground">Started: {new Date(run.startedAt).toLocaleString()}</p>

@@ -50,7 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (format === "pdf") {
     const lines = [
-      `SignalSentiment Report`,
+      `Senti Report`,
       `Entity: ${report.entity.canonicalName}`,
       `Overall Score: ${report.overallScore}`,
       `Confidence: ${Math.round(report.confidence * 100)}%`,

@@ -1,4 +1,4 @@
-export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook";
+export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook" | "openrouter";
 export type EntityCategory = "stock" | "sports" | "product" | "auto";
 export type TrendDirection = "up" | "down" | "flat";
 

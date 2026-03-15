@@ -5,6 +5,7 @@ import { dedupeContent, normalizeContent } from "./normalize";
 import { buildReportInsights, scoreSentiment, sourceBreakdown } from "./sentiment";
 import { resolveEntity } from "./entity-resolver";
 import { saveReportArtifacts } from "@/lib/repositories/report-repository";
+import { pickRepresentativeItems } from "./representatives";
 
 export async function generateReport(query: SearchInput, userId?: string): Promise<SentimentReport> {
   const entity = resolveEntity(query);
@@ -24,7 +25,11 @@ export async function generateReport(query: SearchInput, userId?: string): Promi
     qualityNotes.push(`Mention count (${normalized.length}) is below your minimum threshold (${query.minMentions}).`);
   }
   connectorResults.forEach((result) => {
-    if (!result.healthy || result.error) {
+    if (result.mode !== "live") {
+      qualityNotes.push(
+        `${result.source} is running in ${result.mode} mode: ${result.error ?? result.message ?? "non-live source data"}`
+      );
+    } else if (!result.healthy || result.error) {
       qualityNotes.push(`${result.source} connector issue: ${result.error ?? result.message ?? "unavailable"}`);
     }
   });
@@ -39,7 +44,7 @@ export async function generateReport(query: SearchInput, userId?: string): Promi
     confidence: Number((Math.min(0.95, 0.45 + normalized.length / 200) * entity.confidence).toFixed(2)),
     breakdown: scored.breakdown,
     sourceBreakdown: sourceBreakdown(normalized),
-    representativeItems: normalized.slice(0, 8),
+    representativeItems: pickRepresentativeItems(normalized, 80),
     qualityNotes,
     ...insights
   };

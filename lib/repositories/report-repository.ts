@@ -12,15 +12,35 @@ import {
 } from "@/lib/types/db";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import {
+  deleteMemoryReport,
   getMemoryConnectorStatus,
   getMemoryHistory,
   getMemoryIngestionRuns,
   getMemoryReport,
   saveMemoryReport
 } from "./memory-store";
+import { pickRepresentativeItems } from "@/lib/pipeline/representatives";
 
 function safeJson(value: unknown) {
   return JSON.parse(JSON.stringify(value));
+}
+
+type SourceMode = "live" | "fallback" | "disabled";
+
+function prefixMode(mode: SourceMode, message?: string | null) {
+  return `[mode:${mode}]${message ? ` ${message}` : ""}`;
+}
+
+function extractMode(message: string | null | undefined, healthy: boolean): SourceMode {
+  if (!message) return healthy ? "live" : "fallback";
+  const match = message.match(/^\[mode:(live|fallback|disabled)\]/);
+  if (match) return match[1] as SourceMode;
+  return healthy ? "live" : "fallback";
+}
+
+function stripModePrefix(message: string | null | undefined) {
+  if (!message) return undefined;
+  return message.replace(/^\[mode:(live|fallback|disabled)\]\s?/, "") || undefined;
 }
 
 export async function saveReportArtifacts(
@@ -112,17 +132,22 @@ export async function saveReportArtifacts(
       ended_at: new Date().toISOString(),
       status: connector.healthy ? "success" : "error",
       item_count: connector.items.length,
-      error_message: connector.error ?? null
+      error_message:
+        connector.error != null
+          ? prefixMode(connector.mode, connector.error)
+          : connector.mode !== "live"
+            ? prefixMode(connector.mode, connector.message ?? "Connector not in live mode")
+            : null
     }));
 
     await supabase.from("ingestion_runs").insert(runRows as never);
 
     const connectorRows: ConnectorStatusRow[] = connectors.map((connector) => ({
       source: connector.source,
-      enabled: true,
+      enabled: connector.mode !== "disabled",
       healthy: connector.healthy,
       last_run_at: new Date().toISOString(),
-      message: connector.error ?? connector.message ?? null
+      message: prefixMode(connector.mode, connector.error ?? connector.message ?? null)
     }));
 
     await supabase.from("connector_status").upsert(connectorRows as never, { onConflict: "source" });
@@ -152,13 +177,32 @@ export async function getReportById(reportId: string, userId?: string): Promise<
     .select("*")
     .eq("search_id", reportId)
     .order("frequency", { ascending: false });
-  const sourceItemsRes = await supabase.from("source_items").select("*").eq("search_id", reportId).limit(8);
+  const sourceItemsRes = await supabase
+    .from("source_items")
+    .select("*")
+    .eq("search_id", reportId)
+    .order("published_at", { ascending: false })
+    .limit(250);
 
   const search = searchRes.data as SearchRow | null;
   const result = resultRes.data as SentimentResultRow | null;
   const series = (seriesRes.data as TimeseriesRow[] | null) ?? [];
   const topics = (topicsRes.data as ExtractedTopicRow[] | null) ?? [];
   const sourceItems = (sourceItemsRes.data as SourceItemRow[] | null) ?? [];
+  const representativeItems = pickRepresentativeItems(
+    sourceItems.map((item) => ({
+      source: item.source,
+      externalId: item.external_id,
+      url: item.url,
+      author: item.author,
+      title: item.title,
+      text: item.content,
+      language: item.language,
+      publishedAt: item.published_at,
+      engagement: item.engagement
+    })),
+    80
+  );
 
   if (searchRes.error || resultRes.error || !search || !result) return null;
 
@@ -203,17 +247,7 @@ export async function getReportById(reportId: string, userId?: string): Promise<
       .filter((topic) => topic.sentiment === "negative")
       .map((topic) => ({ theme: topic.theme, sentiment: "negative" as const, count: topic.frequency })),
     risingKeywords: topics.slice(0, 8).map((topic) => topic.theme),
-    representativeItems: sourceItems.map((item) => ({
-      source: item.source,
-      externalId: item.external_id,
-      url: item.url,
-      author: item.author,
-      title: item.title,
-      text: item.content,
-      language: item.language,
-      publishedAt: item.published_at,
-      engagement: item.engagement
-    })),
+    representativeItems,
     anomalies: result.anomalies ?? [],
     qualityNotes: result.quality_notes ?? []
   };
@@ -252,7 +286,8 @@ export async function getConnectorHealth() {
     source: item.source,
     enabled: item.enabled,
     healthy: item.healthy,
-    message: item.message ?? undefined,
+    mode: extractMode(item.message, item.healthy),
+    message: stripModePrefix(item.message),
     lastRunAt: item.last_run_at ?? undefined
   }));
 }
@@ -278,7 +313,33 @@ export async function listIngestionRuns() {
     startedAt: run.started_at,
     endedAt: run.ended_at ?? undefined,
     status: run.status,
+    mode: extractMode(run.error_message, run.status === "success"),
     itemCount: run.item_count,
-    errorMessage: run.error_message ?? undefined
+    errorMessage: stripModePrefix(run.error_message)
   }));
+}
+
+export async function deleteReportById(reportId: string, userId?: string) {
+  const deletedFromMemory = deleteMemoryReport(reportId, userId);
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return deletedFromMemory;
+  }
+
+  let existingQuery = supabase.from("searches").select("id").eq("id", reportId);
+  if (userId) {
+    existingQuery = existingQuery.eq("user_id", userId);
+  }
+  const existing = await existingQuery.maybeSingle();
+  if (!existing.data) return deletedFromMemory;
+
+  let query = supabase.from("searches").delete().eq("id", reportId);
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const response = await query;
+  if (response.error) return deletedFromMemory;
+  return true;
 }

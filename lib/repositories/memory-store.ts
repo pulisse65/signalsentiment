@@ -43,9 +43,10 @@ export function getMemoryConnectorStatus() {
 
   return Array.from(latestPerSource.entries()).map(([source, result]) => ({
     source,
-    enabled: true,
+    enabled: result.mode !== "disabled",
     healthy: result.healthy,
     message: result.error ?? result.message,
+    mode: result.mode,
     lastRunAt: new Date().toISOString()
   }));
 }
@@ -60,9 +61,18 @@ export function getMemoryIngestionRuns() {
         startedAt: entry.report.generatedAt,
         endedAt: entry.report.generatedAt,
         status: connector.healthy ? "success" : "error",
+        mode: connector.mode,
         itemCount: connector.items.length,
         errorMessage: connector.error
       }))
     )
     .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+}
+
+export function deleteMemoryReport(id: string, userId?: string) {
+  const report = memoryStore.reports.get(id);
+  if (!report) return false;
+  if (userId && report.userId !== userId) return false;
+  memoryStore.reports.delete(id);
+  return true;
 }

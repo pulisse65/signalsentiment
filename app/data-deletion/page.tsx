@@ -3,9 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function DataDeletionPage() {
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border bg-gradient-to-r from-cyan-100 to-blue-100 p-6">
-        <h1 className="text-3xl font-semibold tracking-tight">SignalSentiment Data Deletion Instructions</h1>
-        <p className="mt-2 text-sm text-slate-700">Last updated: March 14, 2026</p>
+      <section className="rounded-2xl border border-border/70 bg-card/70 p-6 backdrop-blur">
+        <h1 className="text-3xl font-semibold tracking-tight">Senti Data Deletion Instructions</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Last updated: March 14, 2026</p>
       </section>
 
       <Card>
@@ -20,7 +20,7 @@ export default function DataDeletionPage() {
             </a>
             with the subject line &quot;Data Deletion Request&quot;.
           </p>
-          <p>Please include the email address used for your SignalSentiment account.</p>
+          <p>Please include the email address used for your Senti account.</p>
         </CardContent>
       </Card>
 

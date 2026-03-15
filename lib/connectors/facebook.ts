@@ -1,7 +1,7 @@
 import { buildMockItems } from "@/lib/seed/mock-data";
 import { SearchInput, SourceItem } from "@/lib/types/domain";
 import { rangeToHours } from "@/lib/utils/time";
-import { SourceConnector } from "./types";
+import { ConnectorResult, SourceConnector } from "./types";
 
 interface GraphPage {
   id: string;
@@ -85,9 +85,9 @@ export class FacebookConnector implements SourceConnector {
   source = "facebook" as const;
   enabled = process.env.ENABLE_FACEBOOK_CONNECTOR !== "false";
 
-  async collect(query: SearchInput) {
+  async collect(query: SearchInput): Promise<ConnectorResult> {
     if (!this.enabled) {
-      return { source: this.source, items: [], healthy: false, message: "Connector disabled by configuration" };
+      return { source: this.source, items: [], healthy: false, mode: "disabled", message: "Connector disabled by configuration" };
     }
 
     const token = process.env.FACEBOOK_ACCESS_TOKEN;
@@ -97,6 +97,7 @@ export class FacebookConnector implements SourceConnector {
         source: this.source,
         items: fallback,
         healthy: false,
+        mode: "fallback",
         message: "Missing FACEBOOK_ACCESS_TOKEN; using mock fallback"
       };
     }
@@ -120,6 +121,7 @@ export class FacebookConnector implements SourceConnector {
           source: this.source,
           items: [],
           healthy: true,
+          mode: "live",
           message: "No matching Facebook pages for this query"
         };
       }
@@ -154,6 +156,7 @@ export class FacebookConnector implements SourceConnector {
           source: this.source,
           items: fallback,
           healthy: false,
+          mode: "fallback",
           message:
             "Facebook Graph API returned no accessible recent post data (permissions/restrictions likely); using mock fallback"
         };
@@ -163,6 +166,7 @@ export class FacebookConnector implements SourceConnector {
         source: this.source,
         items,
         healthy: true,
+        mode: "live",
         message: `Facebook Graph API ingested ${items.length} items`
       };
     } catch (error) {
@@ -171,6 +175,7 @@ export class FacebookConnector implements SourceConnector {
         source: this.source,
         items: fallback,
         healthy: false,
+        mode: "fallback",
         error: error instanceof Error ? error.message : "Unknown Facebook connector error",
         message: "Using mock fallback because Facebook API request failed"
       };

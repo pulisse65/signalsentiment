@@ -11,10 +11,10 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border bg-gradient-to-r from-cyan-100 to-blue-100 p-6">
-        <h1 className="text-3xl font-semibold tracking-tight">SignalSentiment</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-700">
-          Track sentiment momentum across Reddit, YouTube, TikTok, and Facebook for stocks, sports teams, and products.
+      <section className="rounded-2xl border border-border/70 bg-card/70 p-6 backdrop-blur">
+        <h1 className="text-3xl font-semibold tracking-tight">Senti</h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          Track sentiment momentum across Reddit, OpenRouter AI, YouTube, TikTok, and Facebook for stocks, sports teams, and products.
         </p>
       </section>
 

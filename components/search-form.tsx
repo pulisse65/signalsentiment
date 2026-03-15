@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
 const sources = [
-  { label: "Reddit", value: "reddit" },
-  { label: "YouTube", value: "youtube" },
-  { label: "TikTok", value: "tiktok" },
-  { label: "Facebook", value: "facebook" }
+  { label: "Reddit", value: "reddit", comingSoon: false },
+  { label: "OpenRouter AI", value: "openrouter", comingSoon: false },
+  { label: "YouTube", value: "youtube", comingSoon: true },
+  { label: "TikTok", value: "tiktok", comingSoon: true },
+  { label: "Facebook", value: "facebook", comingSoon: true }
 ];
 
 export function SearchForm() {
@@ -21,7 +22,7 @@ export function SearchForm() {
   const [timeRange, setTimeRange] = useState("7d");
   const [language, setLanguage] = useState("en");
   const [minMentions, setMinMentions] = useState(3);
-  const [selectedSources, setSelectedSources] = useState<string[]>(sources.map((source) => source.value));
+  const [selectedSources, setSelectedSources] = useState<string[]>(["reddit", "openrouter"]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,10 +121,20 @@ export function SearchForm() {
                   <button
                     key={source.value}
                     type="button"
-                    onClick={() => toggleSource(source.value)}
-                    className={`rounded-full border px-3 py-1 text-sm ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}
+                    onClick={() => (source.comingSoon ? undefined : toggleSource(source.value))}
+                    disabled={source.comingSoon}
+                    className={`rounded-full border px-3 py-1 text-sm transition ${
+                      source.comingSoon
+                        ? "cursor-not-allowed border-slate-500/50 bg-slate-500/20 text-slate-400"
+                        : active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card"
+                    }`}
                   >
-                    {source.label}
+                    <span>{source.label}</span>
+                    {source.comingSoon ? (
+                      <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Coming soon</span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -132,8 +143,22 @@ export function SearchForm() {
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
+          {isLoading ? (
+            <div className="space-y-2">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full w-2/3 rounded-full bg-gradient-to-r from-cyan-500 via-blue-500 to-emerald-500"
+                  style={{ animation: "search-progress-shimmer 1.2s ease-in-out infinite" }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pulling source data, scoring sentiment, and generating your report...
+              </p>
+            </div>
+          ) : null}
+
           <Button type="submit" disabled={isLoading || selectedSources.length === 0}>
-            {isLoading ? "Analyzing..." : "Generate report"}
+            {isLoading ? "Generating report..." : "Generate report"}
           </Button>
         </form>
       </CardContent>

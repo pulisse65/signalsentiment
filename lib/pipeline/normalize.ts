@@ -10,6 +10,15 @@ function cleanText(text: string) {
     .trim();
 }
 
+function redditNearDuplicateFingerprint(text: string) {
+  const tokens = cleanText(text)
+    .split(" ")
+    .filter((token) => token.length > 3)
+    .filter((token) => !["referral", "discount", "coupon", "code", "promo", "offer"].includes(token));
+  const uniqueSorted = Array.from(new Set(tokens)).sort();
+  return uniqueSorted.slice(0, 18).join("|");
+}
+
 export function normalizeContent(items: SourceItem[]): NormalizedItem[] {
   return items.map((item) => {
     const normalizedText = cleanText(`${item.title ?? ""} ${item.text}`);
@@ -21,8 +30,20 @@ export function normalizeContent(items: SourceItem[]): NormalizedItem[] {
 
 export function dedupeContent(items: NormalizedItem[]) {
   const seen = new Set<string>();
+  const seenRedditFingerprints = new Set<string>();
   return items.filter((item) => {
     if (seen.has(item.dedupeHash)) return false;
+
+    if (item.source === "reddit") {
+      const fingerprint = redditNearDuplicateFingerprint(`${item.title ?? ""} ${item.normalizedText}`);
+      if (fingerprint && seenRedditFingerprints.has(fingerprint)) {
+        return false;
+      }
+      if (fingerprint) {
+        seenRedditFingerprints.add(fingerprint);
+      }
+    }
+
     seen.add(item.dedupeHash);
     return true;
   });

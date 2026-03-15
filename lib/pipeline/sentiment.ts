@@ -12,7 +12,39 @@ import { clamp } from "@/lib/utils/time";
 const positiveLexicon = ["strong", "great", "solid", "improved", "bullish", "love", "confident", "win", "growth"];
 const negativeLexicon = ["weak", "bad", "concerns", "criticism", "bearish", "loss", "poor", "risk", "injury"];
 
+function explicitScore(text: string) {
+  const normalized = text.toLowerCase();
+
+  const numericScore = normalized.match(/score[^\-\d]{0,20}(-?\d{1,3})(?:\.?\d+)?/i)?.[1];
+  if (numericScore) {
+    const value = Number(numericScore);
+    if (!Number.isNaN(value)) return clamp(value / 100, -1, 1);
+  }
+
+  const positivePct = normalized.match(/positive[^\d]{0,20}(\d{1,3})%/)?.[1];
+  const neutralPct = normalized.match(/neutral[^\d]{0,20}(\d{1,3})%/)?.[1];
+  const negativePct = normalized.match(/negative[^\d]{0,20}(\d{1,3})%/)?.[1];
+  if (positivePct && neutralPct && negativePct) {
+    const p = Number(positivePct);
+    const n = Number(negativePct);
+    if (!Number.isNaN(p) && !Number.isNaN(n)) {
+      return clamp((p - n) / 100, -1, 1);
+    }
+  }
+
+  const label = normalized.match(/overall sentiment[^a-z]{0,20}(positive|neutral|negative|mixed)/)?.[1];
+  if (label === "positive") return 0.6;
+  if (label === "negative") return -0.6;
+  if (label === "mixed") return 0.1;
+  if (label === "neutral") return 0;
+
+  return null;
+}
+
 function polarityScore(text: string) {
+  const explicit = explicitScore(text);
+  if (explicit !== null) return explicit;
+
   const positiveHits = positiveLexicon.reduce((count, term) => count + (text.includes(term) ? 1 : 0), 0);
   const negativeHits = negativeLexicon.reduce((count, term) => count + (text.includes(term) ? 1 : 0), 0);
   return clamp((positiveHits - negativeHits) / 3, -1, 1);

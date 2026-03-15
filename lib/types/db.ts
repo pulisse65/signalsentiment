@@ -1,4 +1,4 @@
-export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook";
+export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook" | "openrouter";
 export type Category = "stock" | "sports" | "product";
 
 export interface SearchRow {

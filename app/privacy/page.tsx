@@ -5,9 +5,9 @@ const effectiveDate = "March 14, 2026";
 export default function PrivacyPage() {
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border bg-gradient-to-r from-cyan-100 to-blue-100 p-6">
-        <h1 className="text-3xl font-semibold tracking-tight">SignalSentiment Privacy Policy</h1>
-        <p className="mt-2 text-sm text-slate-700">Effective date: {effectiveDate}</p>
+      <section className="rounded-2xl border border-border/70 bg-card/70 p-6 backdrop-blur">
+        <h1 className="text-3xl font-semibold tracking-tight">Senti Privacy Policy</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Effective date: {effectiveDate}</p>
       </section>
 
       <Card>
@@ -15,7 +15,7 @@ export default function PrivacyPage() {
           <CardTitle>1. What We Collect</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>SignalSentiment collects account data needed for login and analytics query history.</p>
+          <p>Senti collects account data needed for login and analytics query history.</p>
           <p>
             We process public discussion content and metadata from configured sources (for example, Reddit, YouTube,
             TikTok, Facebook) for sentiment analysis.
