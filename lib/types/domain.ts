@@ -107,3 +107,28 @@ export interface IngestionRun {
   itemCount: number;
   errorMessage?: string;
 }
+
+export type RefreshJobState = "queued" | "running" | "completed" | "error";
+export type RefreshStepState = "pending" | "running" | "completed" | "skipped" | "error";
+
+export interface RefreshJobStep {
+  source: SourceName;
+  status: RefreshStepState;
+  startedAt?: string;
+  endedAt?: string;
+  message?: string;
+  error?: string;
+  itemCount?: number;
+}
+
+export interface RefreshJobStatus {
+  jobId: string;
+  baseReportId: string;
+  status: RefreshJobState;
+  progressPct: number;
+  startedAt: string;
+  endedAt?: string;
+  resultReportId?: string;
+  error?: string;
+  steps: RefreshJobStep[];
+}

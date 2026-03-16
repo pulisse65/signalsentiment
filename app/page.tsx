@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { listReports } from "@/lib/repositories/report-repository";
 import { getCurrentUserId } from "@/lib/supabase/auth";
 import { Badge } from "@/components/ui/badge";
+import { formatUtcTimestamp } from "@/lib/utils/format";
 
 export default async function HomePage() {
   const userId = await getCurrentUserId();
@@ -32,7 +33,7 @@ export default async function HomePage() {
               <Link key={report.reportId} href={`/report/${report.reportId}`} className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 hover:bg-secondary">
                 <div>
                   <p className="font-medium">{report.entity.canonicalName}</p>
-                  <p className="text-sm text-muted-foreground">{new Date(report.generatedAt).toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">{formatUtcTimestamp(report.generatedAt)}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge>{report.entity.category}</Badge>

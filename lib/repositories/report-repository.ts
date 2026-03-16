@@ -1,5 +1,5 @@
 import { ConnectorResult } from "@/lib/connectors/types";
-import { NormalizedItem, SentimentReport } from "@/lib/types/domain";
+import { NormalizedItem, SearchInput, SentimentReport } from "@/lib/types/domain";
 import {
   ConnectorStatusRow,
   ExtractedTopicRow,
@@ -20,6 +20,8 @@ import {
   saveMemoryReport
 } from "./memory-store";
 import { pickRepresentativeItems } from "@/lib/pipeline/representatives";
+import { dedupeContent, normalizeContent } from "@/lib/pipeline/normalize";
+import { buildReportInsights } from "@/lib/pipeline/sentiment";
 
 function safeJson(value: unknown) {
   return JSON.parse(JSON.stringify(value));
@@ -41,6 +43,11 @@ function extractMode(message: string | null | undefined, healthy: boolean): Sour
 function stripModePrefix(message: string | null | undefined) {
   if (!message) return undefined;
   return message.replace(/^\[mode:(live|fallback|disabled)\]\s?/, "") || undefined;
+}
+
+function querySignature(input: SearchInput) {
+  const sourceKey = [...input.selectedSources].sort().join(",");
+  return [input.query.trim().toLowerCase(), input.category, input.timeRange, input.language ?? "en", String(input.minMentions), sourceKey].join("|");
 }
 
 export async function saveReportArtifacts(
@@ -189,18 +196,23 @@ export async function getReportById(reportId: string, userId?: string): Promise<
   const series = (seriesRes.data as TimeseriesRow[] | null) ?? [];
   const topics = (topicsRes.data as ExtractedTopicRow[] | null) ?? [];
   const sourceItems = (sourceItemsRes.data as SourceItemRow[] | null) ?? [];
+  const reconstructedItems = sourceItems.map((item) => ({
+    source: item.source,
+    externalId: item.external_id,
+    url: item.url,
+    author: item.author,
+    title: item.title,
+    text: item.content,
+    language: item.language,
+    publishedAt: item.published_at,
+    engagement: item.engagement
+  }));
+  const recomputedInsights =
+    (series.length === 0 || topics.length === 0) && reconstructedItems.length > 0
+      ? buildReportInsights(dedupeContent(normalizeContent(reconstructedItems)))
+      : null;
   const representativeItems = pickRepresentativeItems(
-    sourceItems.map((item) => ({
-      source: item.source,
-      externalId: item.external_id,
-      url: item.url,
-      author: item.author,
-      title: item.title,
-      text: item.content,
-      language: item.language,
-      publishedAt: item.published_at,
-      engagement: item.engagement
-    })),
+    reconstructedItems,
     80
   );
 
@@ -228,27 +240,33 @@ export async function getReportById(reportId: string, userId?: string): Promise<
     overallScore: result.overall_score,
     mentionVolume: result.mention_volume,
     confidence: result.confidence_score,
-    momentum: result.momentum,
+    momentum: recomputedInsights?.momentum ?? result.momentum,
     breakdown: {
       positivePct: result.positive_pct,
       neutralPct: result.neutral_pct,
       negativePct: result.negative_pct
     },
     sourceBreakdown: result.source_breakdown as SentimentReport["sourceBreakdown"],
-    timeseries: series.map((point) => ({
-      timestamp: point.bucket_time,
-      sentimentScore: point.sentiment_score,
-      mentions: point.mention_count
-    })),
-    topPositiveThemes: topics
-      .filter((topic) => topic.sentiment === "positive")
-      .map((topic) => ({ theme: topic.theme, sentiment: "positive" as const, count: topic.frequency })),
-    topNegativeThemes: topics
-      .filter((topic) => topic.sentiment === "negative")
-      .map((topic) => ({ theme: topic.theme, sentiment: "negative" as const, count: topic.frequency })),
-    risingKeywords: topics.slice(0, 8).map((topic) => topic.theme),
+    timeseries:
+      recomputedInsights?.timeseries ??
+      series.map((point) => ({
+        timestamp: point.bucket_time,
+        sentimentScore: point.sentiment_score,
+        mentions: point.mention_count
+      })),
+    topPositiveThemes:
+      recomputedInsights?.topPositiveThemes ??
+      topics
+        .filter((topic) => topic.sentiment === "positive")
+        .map((topic) => ({ theme: topic.theme, sentiment: "positive" as const, count: topic.frequency })),
+    topNegativeThemes:
+      recomputedInsights?.topNegativeThemes ??
+      topics
+        .filter((topic) => topic.sentiment === "negative")
+        .map((topic) => ({ theme: topic.theme, sentiment: "negative" as const, count: topic.frequency })),
+    risingKeywords: recomputedInsights?.risingKeywords ?? topics.slice(0, 8).map((topic) => topic.theme),
     representativeItems,
-    anomalies: result.anomalies ?? [],
+    anomalies: recomputedInsights?.anomalies ?? result.anomalies ?? [],
     qualityNotes: result.quality_notes ?? []
   };
 }
@@ -270,6 +288,21 @@ export async function listReports(userId?: string) {
 
   const reports = await Promise.all(records.map((record) => getReportById(record.id, userId)));
   return reports.filter((item): item is SentimentReport => Boolean(item));
+}
+
+export async function findPreviousComparableReport(current: SentimentReport, userId?: string) {
+  const history = await listReports(userId);
+  const currentTimestamp = Date.parse(current.generatedAt);
+  const signature = querySignature(current.query);
+
+  const candidates = history
+    .filter((item) => item.reportId !== current.reportId)
+    .filter((item) => querySignature(item.query) === signature)
+    .filter((item) => item.entity.canonicalName === current.entity.canonicalName)
+    .filter((item) => Date.parse(item.generatedAt) < currentTimestamp)
+    .sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt));
+
+  return candidates[0] ?? null;
 }
 
 export async function getConnectorHealth() {

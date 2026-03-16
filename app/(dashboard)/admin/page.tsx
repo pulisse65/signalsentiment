@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getConnectorHealth, listIngestionRuns } from "@/lib/repositories/report-repository";
+import { formatUtcTimestamp } from "@/lib/utils/format";
 
 function modeBadge(mode: "live" | "fallback" | "disabled") {
   if (mode === "live") return "bg-emerald-100 text-emerald-800";
@@ -31,7 +32,7 @@ export default async function AdminPage() {
                   </div>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{status.message ?? "No status message."}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Last run: {status.lastRunAt ? new Date(status.lastRunAt).toLocaleString() : "N/A"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Last run: {status.lastRunAt ? formatUtcTimestamp(status.lastRunAt) : "N/A"}</p>
               </div>
             ))}
           </div>
@@ -58,7 +59,7 @@ export default async function AdminPage() {
                   </div>
                 </div>
                 <p className="mt-1 text-muted-foreground">Items: {run.itemCount}</p>
-                <p className="text-xs text-muted-foreground">Started: {new Date(run.startedAt).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Started: {formatUtcTimestamp(run.startedAt)}</p>
                 {run.errorMessage ? <p className="mt-1 text-xs text-red-700">Error: {run.errorMessage}</p> : null}
               </div>
             ))}

@@ -9,21 +9,44 @@ import { SourceBreakdownChart } from "@/components/charts/source-breakdown-chart
 import { ThemeFrequencyChart } from "@/components/charts/theme-frequency-chart";
 import { ReportSourceExplorer } from "@/components/report-source-explorer";
 import { DeleteReportButton } from "@/components/delete-report-button";
-import { getReportById } from "@/lib/repositories/report-repository";
+import { RefreshReportButton } from "@/components/refresh-report-button";
+import { findPreviousComparableReport, getReportById } from "@/lib/repositories/report-repository";
 import { getCurrentUserId } from "@/lib/supabase/auth";
+import { formatUtcTimestamp } from "@/lib/utils/format";
 
-export default async function ReportPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ReportPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ compare?: string }>;
+}) {
   const { id } = await params;
+  const { compare } = await searchParams;
   const userId = await getCurrentUserId();
   const report = await getReportById(id, userId);
 
   if (!report) notFound();
+  const explicitComparison = compare && compare !== id ? await getReportById(compare, userId) : null;
+  const previousComparable = explicitComparison ?? (await findPreviousComparableReport(report, userId));
+  const scoreDelta = previousComparable ? Number((report.overallScore - previousComparable.overallScore).toFixed(2)) : null;
+  const mentionDelta = previousComparable ? report.mentionVolume - previousComparable.mentionVolume : null;
+  const confidenceDelta =
+    previousComparable ? Number(((report.confidence - previousComparable.confidence) * 100).toFixed(1)) : null;
 
   const themeChartData = [...report.topPositiveThemes, ...report.topNegativeThemes]
     .slice(0, 10)
     .map((theme) => ({ theme: theme.theme, count: theme.count }));
   const fallbackThemeData = report.risingKeywords.slice(0, 8).map((theme, idx) => ({ theme, count: Math.max(1, 8 - idx) }));
   const effectiveThemeData = themeChartData.length > 0 ? themeChartData : fallbackThemeData;
+  const positiveThemesToShow =
+    report.topPositiveThemes.length > 0
+      ? report.topPositiveThemes
+      : fallbackThemeData.slice(0, 5).map((item) => ({ theme: item.theme, sentiment: "positive" as const, count: item.count }));
+  const negativeThemesToShow =
+    report.topNegativeThemes.length > 0
+      ? report.topNegativeThemes
+      : fallbackThemeData.slice(5, 10).map((item) => ({ theme: item.theme, sentiment: "negative" as const, count: item.count }));
 
   return (
     <div className="space-y-6">
@@ -118,6 +141,43 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       <section className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
+            <CardTitle>Auto Compare</CardTitle>
+            <CardDescription>
+              Compare this report to the most recent previous run with the same query configuration.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {previousComparable ? (
+              <>
+                <p className="text-muted-foreground">
+                  Baseline: {formatUtcTimestamp(previousComparable.generatedAt)}
+                </p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-muted-foreground">Score Delta</p>
+                    <p className="text-lg font-semibold">{(scoreDelta ?? 0) > 0 ? `+${scoreDelta}` : scoreDelta}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-muted-foreground">Mention Delta</p>
+                    <p className="text-lg font-semibold">{(mentionDelta ?? 0) > 0 ? `+${mentionDelta}` : mentionDelta}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-muted-foreground">Confidence Delta</p>
+                    <p className="text-lg font-semibold">
+                      {(confidenceDelta ?? 0) > 0 ? `+${confidenceDelta}` : confidenceDelta}%
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground">No previous comparable run yet. Use refresh to create one.</p>
+            )}
+            <RefreshReportButton reportId={report.reportId} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Top Themes</CardTitle>
             <CardDescription>Positive and negative drivers</CardDescription>
           </CardHeader>
@@ -125,17 +185,19 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
             <div>
               <p className="mb-2 text-sm font-medium">Positive</p>
               <ul className="space-y-2 text-sm">
-                {report.topPositiveThemes.map((theme) => (
+                {positiveThemesToShow.map((theme) => (
                   <li key={`pos-${theme.theme}`} className="rounded border px-3 py-2">{theme.theme} ({theme.count})</li>
                 ))}
+                {positiveThemesToShow.length === 0 ? <li className="rounded border px-3 py-2 text-muted-foreground">No dominant positive themes detected.</li> : null}
               </ul>
             </div>
             <div>
               <p className="mb-2 text-sm font-medium">Negative</p>
               <ul className="space-y-2 text-sm">
-                {report.topNegativeThemes.map((theme) => (
+                {negativeThemesToShow.map((theme) => (
                   <li key={`neg-${theme.theme}`} className="rounded border px-3 py-2">{theme.theme} ({theme.count})</li>
                 ))}
+                {negativeThemesToShow.length === 0 ? <li className="rounded border px-3 py-2 text-muted-foreground">No dominant negative themes detected.</li> : null}
               </ul>
             </div>
           </CardContent>
@@ -187,6 +249,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       <ReportSourceExplorer report={report} />
 
       <div className="flex flex-wrap gap-3">
+        <RefreshReportButton reportId={report.reportId} />
         <Button asChild>
           <a href={`/api/export/${report.reportId}?format=csv`}>Export CSV</a>
         </Button>

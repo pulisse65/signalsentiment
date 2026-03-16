@@ -6,6 +6,9 @@ import { format } from "date-fns";
 
 export function MentionVolumeChart({ data }: { data: TimePoint[] }) {
   const normalized = data.map((point) => ({ ...point, label: format(new Date(point.timestamp), "MMM d HH:mm") }));
+  if (normalized.length === 0) {
+    return <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">No mention-volume data available for this search.</div>;
+  }
 
   return (
     <div className="h-72 w-full">

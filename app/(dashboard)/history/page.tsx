@@ -2,8 +2,10 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteReportButton } from "@/components/delete-report-button";
 import { HistoryCompare } from "@/components/history-compare";
+import { RefreshReportButton } from "@/components/refresh-report-button";
 import { listReports } from "@/lib/repositories/report-repository";
 import { getCurrentUserId } from "@/lib/supabase/auth";
+import { formatUtcTimestamp } from "@/lib/utils/format";
 
 export default async function HistoryPage() {
   const userId = await getCurrentUserId();
@@ -27,7 +29,7 @@ export default async function HistoryPage() {
                     {report.entity.canonicalName}
                   </Link>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">{new Date(report.generatedAt).toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">{formatUtcTimestamp(report.generatedAt)}</p>
                     <DeleteReportButton reportId={report.reportId} variant="ghost" />
                   </div>
                 </div>
@@ -35,6 +37,9 @@ export default async function HistoryPage() {
                   <span>Score: {report.overallScore}</span>
                   <span>Mentions: {report.mentionVolume}</span>
                   <span>Category: {report.entity.category}</span>
+                </div>
+                <div className="mt-3">
+                  <RefreshReportButton reportId={report.reportId} variant="ghost" />
                 </div>
               </div>
             ))}

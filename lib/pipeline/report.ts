@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { collectSourceData } from "@/lib/connectors";
+import { collectSourceData, SourceCollectionStatusEvent } from "@/lib/connectors";
 import { SearchInput, SentimentReport } from "@/lib/types/domain";
 import { dedupeContent, normalizeContent } from "./normalize";
 import { buildReportInsights, scoreSentiment, sourceBreakdown } from "./sentiment";
@@ -7,9 +7,13 @@ import { resolveEntity } from "./entity-resolver";
 import { saveReportArtifacts } from "@/lib/repositories/report-repository";
 import { pickRepresentativeItems } from "./representatives";
 
-export async function generateReport(query: SearchInput, userId?: string): Promise<SentimentReport> {
+interface GenerateReportOptions {
+  onSourceStatus?: (event: SourceCollectionStatusEvent) => void;
+}
+
+export async function generateReport(query: SearchInput, userId?: string, options?: GenerateReportOptions): Promise<SentimentReport> {
   const entity = resolveEntity(query);
-  const connectorResults = await collectSourceData(query);
+  const connectorResults = await collectSourceData(query, { onStatus: options?.onSourceStatus });
   const rawItems = connectorResults
     .flatMap((result) => result.items)
     .filter((item) => item.language === (query.language ?? "en"));

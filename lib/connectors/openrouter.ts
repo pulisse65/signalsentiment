@@ -18,6 +18,16 @@ interface CompletionResponse {
   }>;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function normalizeOutput(raw: string, query: string) {
   const sentimentMatch = raw.match(/overall sentiment score\s*[:\-]\s*(positive|neutral|negative|mixed)/i);
   const trendMatch = raw.match(/trend direction\s*[:\-]\s*([^\n]+)/i);
@@ -98,16 +108,21 @@ export class OpenRouterConnector implements SourceConnector {
       };
     }
 
-    const maxModels = Math.max(1, Number(process.env.OPENROUTER_MAX_MODELS ?? "6"));
+    const maxModels = Math.max(1, Number(process.env.OPENROUTER_MAX_MODELS ?? "4"));
+    const timeoutMs = Math.max(5000, Number(process.env.OPENROUTER_REQUEST_TIMEOUT_MS ?? "60000"));
 
     try {
-      const modelsResponse = await fetch("https://openrouter.ai/api/v1/models", {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
+      const modelsResponse = await fetchWithTimeout(
+        "https://openrouter.ai/api/v1/models",
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          cache: "no-store"
         },
-        cache: "no-store"
-      });
+        timeoutMs
+      );
 
       if (!modelsResponse.ok) {
         throw new Error(`OpenRouter model list failed (${modelsResponse.status})`);
@@ -130,18 +145,22 @@ export class OpenRouterConnector implements SourceConnector {
 
       const completions = await Promise.allSettled(
         models.map(async (model) => {
-          const completionResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json"
+          const completionResponse = await fetchWithTimeout(
+            "https://openrouter.ai/api/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                model: model.id,
+                temperature: 0.1,
+                messages: [{ role: "user", content: prompt }]
+              })
             },
-            body: JSON.stringify({
-              model: model.id,
-              temperature: 0.1,
-              messages: [{ role: "user", content: prompt }]
-            })
-          });
+            timeoutMs
+          );
 
           if (!completionResponse.ok) {
             throw new Error(`Model ${model.id} failed (${completionResponse.status})`);

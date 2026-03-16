@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { SentimentReport } from "@/lib/types/domain";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { formatUtcTimestamp } from "@/lib/utils/format";
 
 export function HistoryCompare({ reports }: { reports: SentimentReport[] }) {
   const [leftId, setLeftId] = useState(reports[0]?.reportId ?? "");
@@ -27,7 +28,7 @@ export function HistoryCompare({ reports }: { reports: SentimentReport[] }) {
   }
 
   const options = reports.map((report) => ({
-    label: `${report.entity.canonicalName} • ${new Date(report.generatedAt).toLocaleString()}`,
+    label: `${report.entity.canonicalName} • ${formatUtcTimestamp(report.generatedAt)}`,
     value: report.reportId
   }));
 
