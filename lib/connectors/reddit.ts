@@ -46,6 +46,14 @@ const STOP_WORDS = new Set([
 ]);
 
 const PROMO_TERMS = ["referral", "coupon", "promo", "discount", "code", "giveaway"];
+const LOW_SIGNAL_PATTERNS = [
+  "daily discussion",
+  "what are your moves",
+  "rate my portfolio",
+  "weekend thread",
+  "off topic",
+  "general chat"
+];
 
 function timeRangeToRedditT(range: SearchInput["timeRange"]) {
   if (range === "24h") return "day";
@@ -100,6 +108,47 @@ function scoreRelevance(post: RedditChild["data"], query: SearchInput) {
   if (containsPromo && !queryIsPromo) score -= 0.35;
 
   return score;
+}
+
+function extractCashtagOrSymbol(query: string) {
+  const match = query.trim().toUpperCase().match(/\$?([A-Z]{1,6})$/);
+  return match?.[1] ?? null;
+}
+
+function hasStrongQueryMatch(post: RedditChild["data"], query: SearchInput) {
+  const queryTokens = tokenizeQuery(query.query);
+  const phrase = normalize(query.query);
+  const title = normalize(post.title ?? "");
+  const body = normalize(post.selftext ?? "");
+  const subreddit = normalize(post.subreddit ?? "");
+  const combined = `${title} ${body} ${subreddit}`;
+
+  if (phrase && (title.includes(phrase) || body.includes(phrase))) return true;
+
+  const symbol = extractCashtagOrSymbol(query.query);
+  if (symbol) {
+    const symbolPattern = new RegExp(`(^|\\s)(\\$?${symbol.toLowerCase()})(\\s|$)`, "i");
+    if (symbolPattern.test(`${post.title ?? ""} ${post.selftext ?? ""}`)) return true;
+    if (subreddit.includes(symbol.toLowerCase())) return true;
+  }
+
+  if (queryTokens.length === 0) return false;
+
+  const titleMatches = queryTokens.filter((token) => title.includes(token)).length;
+  const totalMatches = queryTokens.filter((token) => combined.includes(token)).length;
+  const minRequired = queryTokens.length === 1 ? 1 : Math.min(2, queryTokens.length);
+
+  return totalMatches >= minRequired && titleMatches >= 1;
+}
+
+function isLowSignalThread(post: RedditChild["data"], query: SearchInput) {
+  const title = normalize(post.title ?? "");
+  if (!title) return true;
+
+  const hasLowSignalPattern = LOW_SIGNAL_PATTERNS.some((pattern) => title.includes(pattern));
+  if (!hasLowSignalPattern) return false;
+
+  return !hasStrongQueryMatch(post, query);
 }
 
 function mapRedditPost(post: RedditChild["data"], query: SearchInput): SourceItem | null {
@@ -217,6 +266,7 @@ export class RedditConnector implements SourceConnector {
     }
 
     const hoursWindow = rangeToHours(query.timeRange);
+    const relevanceThreshold = clampThreshold(Number(process.env.REDDIT_RELEVANCE_THRESHOLD ?? "0.68"));
     const clientId = process.env.REDDIT_CLIENT_ID;
     const clientSecret = process.env.REDDIT_CLIENT_SECRET;
     const userAgent = process.env.REDDIT_USER_AGENT ?? "SignalSentiment/1.0";
@@ -237,10 +287,12 @@ export class RedditConnector implements SourceConnector {
       const ranked = children
         .map((child) => child.data)
         .filter((post) => withinRange(post.created_utc, hoursWindow))
+        .filter((post) => !isLowSignalThread(post, query))
+        .filter((post) => hasStrongQueryMatch(post, query))
         .map((post) => ({ post, relevance: scoreRelevance(post, query) }))
-        .filter((entry) => entry.relevance >= 0.45)
+        .filter((entry) => entry.relevance >= relevanceThreshold)
         .sort((a, b) => b.relevance - a.relevance)
-        .slice(0, 40);
+        .slice(0, 50);
 
       const items = ranked
         .map((entry) => mapRedditPost(entry.post, query))
@@ -252,7 +304,7 @@ export class RedditConnector implements SourceConnector {
           items: [],
           healthy: true,
           mode: "live",
-          message: `Reddit ${mode} search returned no strongly relevant matches`
+          message: `Reddit ${mode} search returned no strong matches at threshold ${relevanceThreshold}`
         };
       }
 
@@ -261,7 +313,7 @@ export class RedditConnector implements SourceConnector {
         items,
         healthy: true,
         mode: "live",
-        message: `Reddit ${mode} ingestion returned ${items.length} relevant items`
+        message: `Reddit ${mode} ingestion returned ${items.length} high-relevance items`
       };
     } catch (error) {
       const fallback = buildMockItems(query.query, this.source, hoursWindow);
@@ -275,4 +327,9 @@ export class RedditConnector implements SourceConnector {
       };
     }
   }
+}
+
+function clampThreshold(value: number) {
+  if (Number.isNaN(value)) return 0.68;
+  return Math.min(0.95, Math.max(0.2, value));
 }

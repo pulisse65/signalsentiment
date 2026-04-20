@@ -1,10 +1,11 @@
 import { ReactNode } from "react";
 import Link from "next/link";
-import { Activity, History, Search } from "lucide-react";
+import { Activity, History, Search, TrendingUp } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
   { href: "/", label: "Search", icon: Search },
+  { href: "/stocks", label: "Stocks", icon: TrendingUp },
   { href: "/history", label: "History", icon: History },
   { href: "/admin", label: "Health", icon: Activity }
 ] as const;

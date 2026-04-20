@@ -22,7 +22,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 
-  const defaultTimeoutMs = existing.query.selectedSources.includes("openrouter") ? 240000 : 90000;
+  const hasSlowSource =
+    existing.query.selectedSources.includes("openrouter") || existing.query.selectedSources.includes("news");
+  const defaultTimeoutMs = hasSlowSource ? 240000 : 90000;
   const refreshTimeout = Math.max(15000, Number(process.env.REFRESH_TIMEOUT_MS ?? String(defaultTimeoutMs)));
   const job = createRefreshJob(id, existing.query, userId);
 

@@ -8,6 +8,7 @@ It supports multi-source sentiment analysis with a connector-based ingestion lay
 
 - Search topics/entities with category + source filters
 - Connector framework for Reddit, OpenRouter, YouTube, TikTok, Facebook
+- RSS news ingestion source for stock sentiment (Nasdaq, Seeking Alpha, Investing.com, optional MarketWatch)
 - Sentiment scoring from -100 to +100 with transparent weighting
 - Trend and mention-volume time series
 - Top positive/negative themes + rising keywords
@@ -57,6 +58,13 @@ Current connectors provide policy-safe mock data and explicit messages where off
 - `lib/connectors/youtube.ts`
 - `lib/connectors/tiktok.ts`
 - `lib/connectors/facebook.ts`
+- `lib/connectors/news.ts` (stock-only RSS ingestion)
+
+RSS adapters are pluggable in `lib/news-sources/*` and orchestrated by:
+
+- `lib/services/news-ingestion.ts`
+- `lib/services/news-relevance.ts`
+- `lib/services/news-dedupe.ts`
 
 Reddit connector behavior:
 
@@ -78,6 +86,7 @@ Facebook connector behavior:
 - Falls back to mock data with explicit quality/health messages if permissions or data access are restricted
 
 Add new sources by implementing the same interface and wiring into `lib/connectors/index.ts`.
+Add new RSS feeds by implementing `NewsSourceAdapter` and registering it in `news-ingestion.ts`.
 
 ### Sentiment explainability
 
@@ -149,6 +158,25 @@ For OpenRouter, set:
 - `OPENROUTER_API_KEY`
 - optional `OPENROUTER_MAX_MODELS`
 
+For RSS News, set:
+
+- `ENABLE_NEWS_CONNECTOR`
+- `NEWS_ENABLE_NASDAQ`
+- `NEWS_ENABLE_SEEKING_ALPHA`
+- `NEWS_ENABLE_INVESTING`
+- `NEWS_ENABLE_MARKETWATCH` (default `false`)
+- `NEWS_FETCH_TIMEOUT_MS`
+- `NEWS_RETRY_COUNT`
+- `NEWS_CACHE_TTL_SEC`
+- `NEWS_SOURCE_ALLOWLIST` / `NEWS_SOURCE_BLOCKLIST`
+- `NEWS_SOURCE_PRIORITY_*`
+- `NEWS_WEIGHT_RECENCY` / `NEWS_WEIGHT_RELEVANCE` / `NEWS_WEIGHT_SOURCE_PRIORITY`
+- feed URL templates:
+  - `NEWS_NASDAQ_FEED_URL_TEMPLATE`
+  - `NEWS_SEEKING_ALPHA_SYMBOL_FEED_URL_TEMPLATE`
+  - `NEWS_INVESTING_FEED_URLS`
+  - optional `NEWS_MARKETWATCH_FEED_URL`
+
 3. Run Supabase migration in your project.
 
 4. Start app:
@@ -171,6 +199,20 @@ npm run seed
 - `GET /api/admin/health` connector health
 - `GET /api/export/:id?format=csv|pdf` export
 
+`GET /api/report/:id` now optionally includes:
+
+```json
+{
+  "newsSummary": {
+    "aggregateSentiment": 12.4,
+    "articleCount": 18,
+    "sourcesUsed": ["nasdaq", "seeking_alpha", "investing"],
+    "lastUpdated": "2026-04-18T12:34:56.000Z",
+    "articles": []
+  }
+}
+```
+
 ## Notes on Source APIs
 
 For production connectors, use official APIs and enforce platform policy constraints:
@@ -179,6 +221,11 @@ For production connectors, use official APIs and enforce platform policy constra
 - Rate-limit aware retry/backoff
 - Robust error logging in `ingestion_runs` + `connector_status`
 - No illegal scraping assumptions
+
+RSS-specific note:
+
+- This implementation uses RSS/Atom feeds only and does not scrape article pages.
+- MarketWatch support is disabled by default. Enable only after validating licensing/usage terms for your deployment.
 
 ## Future Work
 

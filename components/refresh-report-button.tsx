@@ -13,6 +13,7 @@ interface RefreshReportButtonProps {
 const SOURCE_LABELS: Record<SourceName, string> = {
   reddit: "Reddit",
   openrouter: "OpenRouter",
+  news: "News",
   youtube: "YouTube",
   tiktok: "TikTok",
   facebook: "Facebook"

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>Sample Finance Feed</title>
+    <link>https://example.com/feed</link>
+    <description>Fixture feed for tests</description>
+    <item>
+      <title>TSLA jumps after strong delivery outlook</title>
+      <link>https://example.com/news/tsla-outlook?utm_source=rss</link>
+      <guid>tsla-1</guid>
+      <pubDate>Sat, 18 Apr 2026 12:00:00 GMT</pubDate>
+      <description>Tesla sentiment improves as investors discuss TSLA momentum.</description>
+      <author>Reporter One</author>
+    </item>
+    <item>
+      <title>Tesla margin concerns pressure TSLA narrative</title>
+      <link>https://example.com/news/tsla-margin</link>
+      <guid>tsla-2</guid>
+      <pubDate>Sat, 18 Apr 2026 10:00:00 GMT</pubDate>
+      <description>Analysts debate risks and opportunities for Tesla shares.</description>
+      <author>Reporter Two</author>
+    </item>
+  </channel>
+</rss>

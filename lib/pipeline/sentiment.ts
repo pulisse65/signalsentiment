@@ -11,6 +11,31 @@ import { clamp } from "@/lib/utils/time";
 
 const positiveLexicon = ["strong", "great", "solid", "improved", "bullish", "love", "confident", "win", "growth"];
 const negativeLexicon = ["weak", "bad", "concerns", "criticism", "bearish", "loss", "poor", "risk", "injury"];
+const themeStopWords = new Set([
+  "about",
+  "after",
+  "again",
+  "against",
+  "being",
+  "between",
+  "could",
+  "their",
+  "there",
+  "these",
+  "those",
+  "would",
+  "while",
+  "where",
+  "which",
+  "because",
+  "thread",
+  "reddit",
+  "openrouter",
+  "analysis",
+  "overall",
+  "sentiment",
+  "score"
+]);
 
 function explicitScore(text: string) {
   const normalized = text.toLowerCase();
@@ -50,11 +75,34 @@ function polarityScore(text: string) {
   return clamp((positiveHits - negativeHits) / 3, -1, 1);
 }
 
+function getNumericMetadata(item: NormalizedItem, key: string) {
+  const metadata = item.metadata;
+  if (!metadata || typeof metadata !== "object") return null;
+  const value = (metadata as Record<string, unknown>)[key];
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  return value;
+}
+
 function engagementWeight(item: NormalizedItem) {
   const { likes = 0, comments = 0, views = 0, shares = 0, upvotes = 0 } = item.engagement;
   const raw = likes * 0.7 + comments * 1.2 + shares * 1.5 + upvotes * 0.9 + views * 0.02;
   const recency = 1 / (1 + item.ageHours / 36);
-  return Math.max(1, raw * recency);
+  const baseWeight = Math.max(1, raw * recency);
+
+  if (item.source !== "news") return baseWeight;
+
+  const sourcePriority = getNumericMetadata(item, "sourcePriority") ?? 3;
+  const relevanceScore = getNumericMetadata(item, "relevanceScore") ?? 0.5;
+
+  const sourcePriorityWeight = Number(process.env.NEWS_WEIGHT_SOURCE_PRIORITY ?? "0.35");
+  const relevanceWeight = Number(process.env.NEWS_WEIGHT_RELEVANCE ?? "0.4");
+  const recencyWeight = Number(process.env.NEWS_WEIGHT_RECENCY ?? "0.25");
+
+  const priorityMultiplier = 1 + Math.max(0, sourcePriorityWeight) * Math.max(0, (sourcePriority - 1) / 4);
+  const relevanceMultiplier = 1 + Math.max(0, relevanceWeight) * Math.max(0, Math.min(1, relevanceScore));
+  const recencyMultiplier = 1 + Math.max(0, recencyWeight) * recency;
+
+  return Math.max(1, baseWeight * priorityMultiplier * relevanceMultiplier * recencyMultiplier);
 }
 
 function classify(score: number): "positive" | "neutral" | "negative" {
@@ -114,19 +162,40 @@ function extractThemes(items: NormalizedItem[]): { positive: ThemeSummary[]; neg
   const positive = new Map<string, number>();
   const negative = new Map<string, number>();
 
+  const toTerms = (text: string) => {
+    const words = text
+      .split(" ")
+      .filter((word) => word.length >= 4 && word.length <= 24)
+      .filter((word) => !themeStopWords.has(word))
+      .filter((word) => !/^\d+$/.test(word));
+
+    const bigrams: string[] = [];
+    for (let idx = 0; idx < words.length - 1; idx += 1) {
+      const a = words[idx];
+      const b = words[idx + 1];
+      if (themeStopWords.has(a) || themeStopWords.has(b)) continue;
+      bigrams.push(`${a} ${b}`);
+    }
+
+    return Array.from(new Set([...words, ...bigrams])).slice(0, 25);
+  };
+
   items.forEach((item) => {
-    const words = item.normalizedText.split(" ").filter((w) => w.length > 4);
-    words.forEach((word) => tokenCounts.set(word, (tokenCounts.get(word) ?? 0) + 1));
+    const terms = toTerms(item.normalizedText);
+    const engagement = item.engagement.comments ?? item.engagement.upvotes ?? 0;
+    const weight = 1 + Math.min(3, Math.log10(1 + Math.max(0, engagement)));
+
+    terms.forEach((term) => tokenCounts.set(term, (tokenCounts.get(term) ?? 0) + weight));
     const score = polarityScore(item.normalizedText);
-    if (score > 0.15) words.slice(0, 4).forEach((word) => positive.set(word, (positive.get(word) ?? 0) + 1));
-    if (score < -0.15) words.slice(0, 4).forEach((word) => negative.set(word, (negative.get(word) ?? 0) + 1));
+    if (score > 0.15) terms.slice(0, 8).forEach((term) => positive.set(term, (positive.get(term) ?? 0) + weight));
+    if (score < -0.15) terms.slice(0, 8).forEach((term) => negative.set(term, (negative.get(term) ?? 0) + weight));
   });
 
   const toThemes = (map: Map<string, number>, sentiment: "positive" | "negative"): ThemeSummary[] =>
     Array.from(map.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([theme, count]) => ({ theme, sentiment, count }));
+      .map(([theme, count]) => ({ theme, sentiment, count: Math.round(count) }));
 
   const keywords = Array.from(tokenCounts.entries())
     .sort((a, b) => b[1] - a[1])
@@ -149,6 +218,10 @@ export function scoreSentiment(items: NormalizedItem[]) {
     breakdown: aggregateBreakdown(labels),
     labels
   };
+}
+
+export function scoreNormalizedText(text: string) {
+  return polarityScore(text);
 }
 
 export function sourceBreakdown(items: NormalizedItem[]): SourceBreakdown[] {

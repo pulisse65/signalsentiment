@@ -13,6 +13,7 @@ const refreshJobs = new Map<string, RefreshJobStoreRecord>();
 const EXPECTED_STEP_MS: Record<SourceName, number> = {
   reddit: 30000,
   openrouter: 120000,
+  news: 45000,
   youtube: 15000,
   tiktok: 15000,
   facebook: 20000

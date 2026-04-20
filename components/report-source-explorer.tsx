@@ -13,6 +13,7 @@ interface ReportSourceExplorerProps {
 const SOURCE_LABELS: Record<SourceName, string> = {
   reddit: "Reddit",
   openrouter: "OpenRouter",
+  news: "News",
   youtube: "YouTube",
   tiktok: "TikTok",
   facebook: "Facebook"
@@ -21,6 +22,7 @@ const SOURCE_LABELS: Record<SourceName, string> = {
 const SOURCE_SECTION_STYLE: Record<SourceName, string> = {
   reddit: "border-orange-400/40 bg-orange-500/10",
   openrouter: "border-cyan-400/40 bg-cyan-500/10",
+  news: "border-emerald-400/40 bg-emerald-500/10",
   youtube: "border-red-400/30 bg-red-500/10",
   tiktok: "border-pink-400/30 bg-pink-500/10",
   facebook: "border-blue-400/30 bg-blue-500/10"
@@ -156,11 +158,30 @@ export function ReportSourceExplorer({ report }: ReportSourceExplorerProps) {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{renderHighlighted(item.title ?? "Untitled")}</p>
                         <Badge>{SOURCE_LABELS[item.source]}</Badge>
+                        {item.source === "news" && typeof item.metadata?.feedSource === "string" ? (
+                          <Badge>{String(item.metadata.feedSource)}</Badge>
+                        ) : null}
                         {item.author ? <Badge>{item.author}</Badge> : null}
                       </div>
                       <span className="text-xs text-muted-foreground">Expand</span>
                     </summary>
                     <pre className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{renderHighlighted(item.text)}</pre>
+                    {item.source === "news" ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {Array.isArray(item.metadata?.tickerMatches) && item.metadata.tickerMatches.length > 0 ? (
+                          <Badge>Ticker: {item.metadata.tickerMatches.join(", ")}</Badge>
+                        ) : null}
+                        {Array.isArray(item.metadata?.companyMatches) && item.metadata.companyMatches.length > 0 ? (
+                          <Badge>Company: {item.metadata.companyMatches.join(", ")}</Badge>
+                        ) : null}
+                        {typeof item.metadata?.relevanceScore === "number" ? (
+                          <Badge>Relevance {Number(item.metadata.relevanceScore).toFixed(2)}</Badge>
+                        ) : null}
+                        {Array.isArray(item.metadata?.matchReasons) && item.metadata.matchReasons.length > 0 ? (
+                          <Badge>Why matched: {item.metadata.matchReasons.slice(0, 3).join(" • ")}</Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span>{formatUtcTimestamp(item.publishedAt)}</span>
                       {item.url.includes(".example.com") ? (

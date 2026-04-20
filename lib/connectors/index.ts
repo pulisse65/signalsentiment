@@ -1,5 +1,6 @@
 import { SearchInput, SourceName } from "@/lib/types/domain";
 import { FacebookConnector } from "./facebook";
+import { NewsConnector } from "./news";
 import { OpenRouterConnector } from "./openrouter";
 import { RedditConnector } from "./reddit";
 import { TikTokConnector } from "./tiktok";
@@ -9,6 +10,7 @@ import { YouTubeConnector } from "./youtube";
 const connectorMap: Record<SourceName, SourceConnector> = {
   reddit: new RedditConnector(),
   openrouter: new OpenRouterConnector(),
+  news: new NewsConnector(),
   youtube: new YouTubeConnector(),
   tiktok: new TikTokConnector(),
   facebook: new FacebookConnector()

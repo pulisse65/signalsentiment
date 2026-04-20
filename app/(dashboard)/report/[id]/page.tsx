@@ -10,7 +10,7 @@ import { ThemeFrequencyChart } from "@/components/charts/theme-frequency-chart";
 import { ReportSourceExplorer } from "@/components/report-source-explorer";
 import { DeleteReportButton } from "@/components/delete-report-button";
 import { RefreshReportButton } from "@/components/refresh-report-button";
-import { findPreviousComparableReport, getReportById } from "@/lib/repositories/report-repository";
+import { findPreviousComparableReport, getReportById, getStockTrendSnapshot } from "@/lib/repositories/report-repository";
 import { getCurrentUserId } from "@/lib/supabase/auth";
 import { formatUtcTimestamp } from "@/lib/utils/format";
 
@@ -29,10 +29,20 @@ export default async function ReportPage({
   if (!report) notFound();
   const explicitComparison = compare && compare !== id ? await getReportById(compare, userId) : null;
   const previousComparable = explicitComparison ?? (await findPreviousComparableReport(report, userId));
+  const stockSnapshot = report.entity.category === "stock" ? await getStockTrendSnapshot(report, userId, 30) : null;
   const scoreDelta = previousComparable ? Number((report.overallScore - previousComparable.overallScore).toFixed(2)) : null;
   const mentionDelta = previousComparable ? report.mentionVolume - previousComparable.mentionVolume : null;
   const confidenceDelta =
     previousComparable ? Number(((report.confidence - previousComparable.confidence) * 100).toFixed(1)) : null;
+
+  const sentimentLabel = report.overallScore >= 20 ? "Positive" : report.overallScore <= -20 ? "Negative" : "Mixed / Neutral";
+  const confidenceLabel = report.confidence >= 0.75 ? "High" : report.confidence >= 0.55 ? "Medium" : "Low";
+  const quickTakeaway =
+    report.momentum === "up"
+      ? "Sentiment is strengthening recently."
+      : report.momentum === "down"
+        ? "Sentiment is weakening recently."
+        : "Sentiment is stable with no major recent shift.";
 
   const themeChartData = [...report.topPositiveThemes, ...report.topNegativeThemes]
     .slice(0, 10)
@@ -71,6 +81,7 @@ export default async function ReportPage({
           </CardHeader>
           <CardContent>
             <p className="text-4xl font-semibold">{report.overallScore}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Guide: +20+ positive, -20- negative, between is mixed/neutral.</p>
           </CardContent>
         </Card>
         <Card>
@@ -96,6 +107,111 @@ export default async function ReportPage({
           </CardHeader>
           <CardContent className="text-sm">
             <p>Possible interpretations: {report.entity.candidates.join(", ")}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Read</CardTitle>
+            <CardDescription>Fast interpretation of what this report means.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Sentiment</p>
+                <p className="text-lg font-semibold">{sentimentLabel}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Trend</p>
+                <p className="text-lg font-semibold capitalize">{report.momentum}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Confidence</p>
+                <p className="text-lg font-semibold">{confidenceLabel}</p>
+              </div>
+            </div>
+            <p className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-cyan-100">{quickTakeaway}</p>
+            <p className="text-xs text-muted-foreground">
+              Tip: start with Overall Score + Trend, then validate with Source Results Explorer to inspect real posts/models.
+            </p>
+          </CardContent>
+        </Card>
+
+        {stockSnapshot ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Stock Sentiment Dashboard (30d)</CardTitle>
+              <CardDescription>Momentum and performance based on sentiment movement and mention growth.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border p-3">
+                  <p className="text-muted-foreground">Momentum Score</p>
+                  <p className="text-lg font-semibold">{stockSnapshot.sentimentMomentumScore}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-muted-foreground">30d Score Change</p>
+                  <p className="text-lg font-semibold">
+                    {stockSnapshot.scoreDelta > 0 ? `+${stockSnapshot.scoreDelta}` : stockSnapshot.scoreDelta}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-muted-foreground">30d Mention Growth</p>
+                  <p className="text-lg font-semibold">
+                    {stockSnapshot.mentionGrowthPct > 0 ? `+${stockSnapshot.mentionGrowthPct}` : stockSnapshot.mentionGrowthPct}%
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Window: {formatUtcTimestamp(stockSnapshot.windowStart)} {"->"} {formatUtcTimestamp(stockSnapshot.windowEnd)} •{" "}
+                {stockSnapshot.reportCount} tracked runs
+              </p>
+              <Button variant="outline" asChild>
+                <Link href="/stocks">Open 30d Stock Leaderboard</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+      </section>
+
+      {report.newsSummary ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>News Summary (RSS)</CardTitle>
+            <CardDescription>
+              {report.newsSummary.articleCount} relevant deduplicated articles • last updated{" "}
+              {formatUtcTimestamp(report.newsSummary.lastUpdated)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Aggregate News Sentiment</p>
+                <p className="text-lg font-semibold">{report.newsSummary.aggregateSentiment}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Sources Used</p>
+                <p className="text-lg font-semibold">{report.newsSummary.sourcesUsed.join(", ") || "none"}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Articles</p>
+                <p className="text-lg font-semibold">{report.newsSummary.articleCount}</p>
+              </div>
+            </div>
+            {report.newsSummary.degradedSources && report.newsSummary.degradedSources.length > 0 ? (
+              <div className="rounded-md border border-amber-400/40 bg-amber-500/10 p-3 text-amber-100">
+                <p className="font-medium">Some news sources were degraded:</p>
+                <ul className="mt-1 space-y-1">
+                  {report.newsSummary.degradedSources.map((entry) => (
+                    <li key={`${entry.source}-${entry.message}`}>
+                      {entry.source}: {entry.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -243,6 +359,8 @@ export default async function ReportPage({
           <p>2. Each item gets a polarity score from either explicit model sentiment signals or lexical sentiment rules.</p>
           <p>3. Scores are weighted by engagement (comments/upvotes/likes/views) and freshness (newer items weigh more).</p>
           <p>4. Final score is mapped to -100..+100, with per-source breakdown and confidence notes.</p>
+          <p>5. Stock momentum score (if category is stock) combines score change + mention growth over the last 30 days.</p>
+          <p>6. RSS news items additionally weight source priority and ticker/company relevance confidence.</p>
         </CardContent>
       </Card>
 

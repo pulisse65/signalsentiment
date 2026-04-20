@@ -1,4 +1,4 @@
-export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook" | "openrouter";
+export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook" | "openrouter" | "news";
 export type Category = "stock" | "sports" | "product";
 
 export interface SearchRow {
@@ -64,6 +64,7 @@ export interface SourceItemRow {
   published_at: string;
   language: string;
   engagement: Record<string, unknown>;
+  metadata: Record<string, unknown>;
 }
 
 export interface ExtractedTopicRow {
@@ -90,4 +91,32 @@ export interface ConnectorStatusRow {
   healthy: boolean;
   last_run_at: string | null;
   message: string | null;
+}
+
+export interface NewsArticleRow {
+  id: string;
+  canonical_url: string;
+  primary_source: string;
+  guid: string | null;
+  fingerprint: string;
+  title: string;
+  summary: string | null;
+  author: string | null;
+  published_at: string;
+  source_priority: number;
+  ticker_matches: string[];
+  company_matches: string[];
+  raw_metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SearchNewsArticleRow {
+  search_id: string;
+  news_article_id: string;
+  relevance_score: number;
+  sentiment_score: number | null;
+  match_reasons: string[];
+  merged_sources: string[];
+  created_at: string;
 }

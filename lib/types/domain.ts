@@ -1,4 +1,4 @@
-export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook" | "openrouter";
+export type SourceName = "reddit" | "youtube" | "tiktok" | "facebook" | "openrouter" | "news";
 export type EntityCategory = "stock" | "sports" | "product" | "auto";
 export type TrendDirection = "up" | "down" | "flat";
 
@@ -29,6 +29,7 @@ export interface SourceItem {
   text: string;
   language: string;
   publishedAt: string;
+  metadata?: Record<string, unknown>;
   engagement: {
     likes?: number;
     comments?: number;
@@ -87,6 +88,7 @@ export interface SentimentReport {
   representativeItems: SourceItem[];
   anomalies: string[];
   qualityNotes: string[];
+  newsSummary?: NewsSummary;
 }
 
 export interface ConnectorStatus {
@@ -106,6 +108,48 @@ export interface IngestionRun {
   status: "success" | "error";
   itemCount: number;
   errorMessage?: string;
+}
+
+export interface StockTrendSnapshot {
+  symbol: string;
+  reportCount: number;
+  windowStart: string;
+  windowEnd: string;
+  latestScore: number;
+  latestMentions: number;
+  scoreDelta: number;
+  mentionGrowthPct: number;
+  sentimentMomentumScore: number;
+  direction: "accelerating" | "stable" | "cooling";
+}
+
+export interface NewsArticleSummary {
+  id: string;
+  source: string;
+  sourcePriority: number;
+  title: string;
+  summary?: string;
+  url: string;
+  publishedAt: string;
+  author?: string;
+  tickerMatches: string[];
+  companyMatches: string[];
+  relevanceScore: number;
+  sentimentScore?: number;
+  matchReasons: string[];
+  mergedSources?: string[];
+}
+
+export interface NewsSummary {
+  aggregateSentiment: number;
+  articleCount: number;
+  sourcesUsed: string[];
+  lastUpdated: string;
+  articles: NewsArticleSummary[];
+  degradedSources?: Array<{
+    source: string;
+    message: string;
+  }>;
 }
 
 export type RefreshJobState = "queued" | "running" | "completed" | "error";

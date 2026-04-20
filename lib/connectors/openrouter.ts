@@ -11,6 +11,11 @@ interface ModelResponse {
 }
 
 interface CompletionResponse {
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
   choices?: Array<{
     message?: {
       content?: string;
@@ -82,6 +87,64 @@ Provide:
 Keep the analysis concise but insightful.`;
 }
 
+function parseList(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function applyModelFilters(models: OpenRouterModel[]) {
+  const allowlist = parseList(process.env.OPENROUTER_MODEL_ALLOWLIST);
+  const preferredOrder = parseList(process.env.OPENROUTER_MODEL_PREFERENCE);
+
+  let filtered = models;
+  if (allowlist.length > 0) {
+    filtered = models.filter((model) => allowlist.some((allowed) => model.id.includes(allowed)));
+  }
+
+  if (preferredOrder.length === 0) return filtered;
+
+  const rank = (modelId: string) => {
+    const idx = preferredOrder.findIndex((pref) => modelId.includes(pref));
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+  };
+
+  return [...filtered].sort((a, b) => {
+    const rankA = rank(a.id);
+    const rankB = rank(b.id);
+    if (rankA !== rankB) return rankA - rankB;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+async function settleWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  runner: (item: T, index: number) => Promise<R>
+) {
+  const safeConcurrency = Math.max(1, Math.min(concurrency, items.length || 1));
+  const results: Array<PromiseSettledResult<R>> = new Array(items.length);
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: safeConcurrency }, async () => {
+      while (true) {
+        const index = cursor++;
+        if (index >= items.length) return;
+        try {
+          const value = await runner(items[index], index);
+          results[index] = { status: "fulfilled", value };
+        } catch (error) {
+          results[index] = { status: "rejected", reason: error };
+        }
+      }
+    })
+  );
+
+  return results;
+}
+
 export class OpenRouterConnector implements SourceConnector {
   source = "openrouter" as const;
   enabled = process.env.ENABLE_OPENROUTER_CONNECTOR !== "false";
@@ -108,8 +171,11 @@ export class OpenRouterConnector implements SourceConnector {
       };
     }
 
-    const maxModels = Math.max(1, Number(process.env.OPENROUTER_MAX_MODELS ?? "4"));
+    const maxModels = Math.max(1, Number(process.env.OPENROUTER_MAX_MODELS ?? "3"));
     const timeoutMs = Math.max(5000, Number(process.env.OPENROUTER_REQUEST_TIMEOUT_MS ?? "60000"));
+    const maxTokens = Math.max(150, Number(process.env.OPENROUTER_MAX_TOKENS ?? "500"));
+    const retries = Math.max(0, Number(process.env.OPENROUTER_RETRIES ?? "1"));
+    const concurrency = Math.max(1, Number(process.env.OPENROUTER_CONCURRENCY ?? "2"));
 
     try {
       const modelsResponse = await fetchWithTimeout(
@@ -129,7 +195,8 @@ export class OpenRouterConnector implements SourceConnector {
       }
 
       const modelsPayload = (await modelsResponse.json()) as ModelResponse;
-      const models = (modelsPayload.data ?? []).slice(0, maxModels);
+      const candidateModels = applyModelFilters(modelsPayload.data ?? []);
+      const models = candidateModels.slice(0, maxModels);
 
       if (models.length === 0) {
         return {
@@ -142,55 +209,78 @@ export class OpenRouterConnector implements SourceConnector {
       }
 
       const prompt = buildPrompt(query.query);
+      let totalRetriesUsed = 0;
 
-      const completions = await Promise.allSettled(
-        models.map(async (model) => {
-          const completionResponse = await fetchWithTimeout(
-            "https://openrouter.ai/api/v1/chat/completions",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/json"
+      const completions = await settleWithConcurrency(models, concurrency, async (model, modelIdx) => {
+        let attempt = 0;
+        while (true) {
+          try {
+            const completionResponse = await fetchWithTimeout(
+              "https://openrouter.ai/api/v1/chat/completions",
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  model: model.id,
+                  temperature: 0.1,
+                  max_tokens: maxTokens,
+                  messages: [{ role: "user", content: prompt }]
+                })
               },
-              body: JSON.stringify({
-                model: model.id,
-                temperature: 0.1,
-                messages: [{ role: "user", content: prompt }]
-              })
-            },
-            timeoutMs
-          );
+              timeoutMs
+            );
 
-          if (!completionResponse.ok) {
-            throw new Error(`Model ${model.id} failed (${completionResponse.status})`);
-          }
-
-          const payload = (await completionResponse.json()) as CompletionResponse;
-          const content = payload.choices?.[0]?.message?.content?.trim();
-          if (!content) throw new Error(`Model ${model.id} returned empty content`);
-
-          const item: SourceItem = {
-            source: "openrouter",
-            externalId: `${model.id}-${Date.now()}`,
-            url: `https://openrouter.ai/models/${encodeURIComponent(model.id)}`,
-            author: model.name ?? model.id,
-            title: `OpenRouter model analysis: ${model.name ?? model.id}`,
-            text: normalizeOutput(content, query.query),
-            language: query.language ?? "en",
-            publishedAt: new Date().toISOString(),
-            engagement: {
-              likes: 0,
-              comments: 0,
-              views: 0,
-              shares: 0,
-              upvotes: 0
+            if (!completionResponse.ok) {
+              const retryable = completionResponse.status === 429 || completionResponse.status >= 500;
+              if (retryable && attempt < retries) {
+                attempt += 1;
+                totalRetriesUsed += 1;
+                await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+                continue;
+              }
+              throw new Error(`Model ${model.id} failed (${completionResponse.status})`);
             }
-          };
 
-          return item;
-        })
-      );
+            const payload = (await completionResponse.json()) as CompletionResponse;
+            const content = payload.choices?.[0]?.message?.content?.trim();
+            if (!content) throw new Error(`Model ${model.id} returned empty content`);
+
+            const usageText = payload.usage?.total_tokens ? `\nToken usage: ${payload.usage.total_tokens}` : "";
+
+            const item: SourceItem = {
+              source: "openrouter",
+              externalId: `${model.id}-${Date.now()}-${modelIdx}`,
+              url: `https://openrouter.ai/models/${encodeURIComponent(model.id)}`,
+              author: model.name ?? model.id,
+              title: `OpenRouter model analysis: ${model.name ?? model.id}`,
+              text: `${normalizeOutput(content, query.query)}${usageText}`,
+              language: query.language ?? "en",
+              publishedAt: new Date().toISOString(),
+              engagement: {
+                likes: 0,
+                comments: 0,
+                views: 0,
+                shares: 0,
+                upvotes: 0
+              }
+            };
+
+            return item;
+          } catch (error) {
+            const isAbortError = error instanceof Error && error.name === "AbortError";
+            if ((isAbortError || error instanceof Error) && attempt < retries) {
+              attempt += 1;
+              totalRetriesUsed += 1;
+              await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+              continue;
+            }
+            throw error;
+          }
+        }
+      });
 
       const items = completions
         .filter((result): result is PromiseFulfilledResult<SourceItem> => result.status === "fulfilled")
@@ -222,8 +312,8 @@ export class OpenRouterConnector implements SourceConnector {
         mode: failedCount === 0 ? "live" : "fallback",
         message:
           failedCount === 0
-            ? `OpenRouter analysis completed across ${items.length} models`
-            : `OpenRouter completed on ${items.length}/${completions.length} models`
+            ? `OpenRouter analysis completed across ${items.length} models (retries used: ${totalRetriesUsed})`
+            : `OpenRouter completed on ${items.length}/${completions.length} models (retries used: ${totalRetriesUsed})`
       };
     } catch (error) {
       return {

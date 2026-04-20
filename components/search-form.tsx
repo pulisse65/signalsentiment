@@ -10,19 +10,25 @@ import { Select } from "@/components/ui/select";
 const sources = [
   { label: "Reddit", value: "reddit", comingSoon: false },
   { label: "OpenRouter AI", value: "openrouter", comingSoon: false },
+  { label: "News (RSS)", value: "news", comingSoon: false },
   { label: "YouTube", value: "youtube", comingSoon: true },
   { label: "TikTok", value: "tiktok", comingSoon: true },
   { label: "Facebook", value: "facebook", comingSoon: true }
 ];
 
-export function SearchForm() {
+interface SearchFormProps {
+  initialQuery?: string;
+  initialCategory?: "stock" | "sports" | "product" | "auto";
+}
+
+export function SearchForm({ initialQuery = "TSLA", initialCategory = "auto" }: SearchFormProps) {
   const router = useRouter();
-  const [query, setQuery] = useState("TSLA");
-  const [category, setCategory] = useState("auto");
+  const [query, setQuery] = useState(initialQuery);
+  const [category, setCategory] = useState(initialCategory);
   const [timeRange, setTimeRange] = useState("7d");
   const [language, setLanguage] = useState("en");
   const [minMentions, setMinMentions] = useState(3);
-  const [selectedSources, setSelectedSources] = useState<string[]>(["reddit", "openrouter"]);
+  const [selectedSources, setSelectedSources] = useState<string[]>(["reddit", "openrouter", "news"]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +86,7 @@ export function SearchForm() {
               <label className="text-sm font-medium">Category</label>
               <Select
                 value={category}
-                onChange={(event) => setCategory(event.target.value)}
+                onChange={(event) => setCategory(event.target.value as "auto" | "stock" | "sports" | "product")}
                 options={[
                   { label: "Auto-detect", value: "auto" },
                   { label: "Stock", value: "stock" },
